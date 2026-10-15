@@ -134,7 +134,7 @@ import Overopt from '../figs/Overopt.tsx';
       <p class="small muted">同一回答的所有 token 共享 Â_i；DeepSeek-R1 用它训练长链推理。</p>
     </div>
   </div>
-  <Figure title="Interactive · group-relative advantage" n={7} caption="答对的少数样本获得大的正优势。Dr. GRPO 指出 ÷std 会让过易/过难题权重偏大，并带来长度偏差。">
+  <Figure title="Interactive · group-relative advantage" n={7} caption="答对的少数样本获得大的正优势。Dr. GRPO 指出：÷std 让过易/过难题权重偏大（难度偏差），按回答长度归一化 loss 则带来长度偏差。">
     <GRPOGroup client:load />
   </Figure>
 </Slide>
