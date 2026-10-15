@@ -4,7 +4,7 @@ import { useSlideStep } from './useSlideStep';
 import { C, reveal } from './parts';
 // Functional form from Gao et al. 2023 (RL): R(d) = d(α − β log d), d = sqrt(KL). Illustrative constants.
 export default function Overopt() {
-  const [ref, s] = useSlideStep<SVGSVGElement>();
+  const [ref, s] = useSlideStep<SVGSVGElement>(1, 1200);
   const W = 640, H = 380, M = { l: 50, r: 20, t: 20, b: 50 };
   const x = d3.scaleLinear().domain([0, 10]).range([M.l, W - M.r]);
   const y = d3.scaleLinear().domain([0, 6]).range([H - M.b, M.t]);

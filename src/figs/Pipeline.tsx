@@ -8,7 +8,7 @@ const stages = [
   { eb: 'Stage 3', name: '强化学习', en: 'RLHF / RLVR', data: '在线采样 + 奖励信号', obj: 'max E[r] − β·KL', out: 'Chat / Reasoning model' },
 ];
 export default function Pipeline() {
-  const [ref, s] = useSlideStep<SVGSVGElement>();
+  const [ref, s] = useSlideStep<SVGSVGElement>(3);
   const W = 300, G = 54, X0 = 10;
   return (<svg ref={ref} viewBox="0 0 1410 400" width="100%" style={{ display: 'block' }}>
     <Defs />

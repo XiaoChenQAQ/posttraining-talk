@@ -12,9 +12,9 @@ export default function GRPOGroup() {
   const y = d3.scaleLinear().domain([-amax, amax]).range([H - 10, 20]);
   const cw = 150, gap = (W - 8 * cw) / 7;
   return (<div>
-    <div style={{ display: 'flex', gap: 28, alignItems: 'center', marginBottom: 10 }} className="ctl">
-      <span style={{ fontSize: 18 }}>同一个 prompt，采样 G = 8 个回答 → <span style={{ color: 'var(--muted)' }}>点击卡片切换 对/错</span></span>
-      <span style={{ marginLeft: 'auto', fontSize: 18 }}>均值 <b style={{ color: 'var(--accent)' }}>{mean.toFixed(3)}</b>　标准差 <b style={{ color: 'var(--accent)' }}>{std.toFixed(3)}</b></span>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 24px', alignItems: 'center', marginBottom: 10, fontSize: 15 }} className="ctl">
+      <span style={{ fontSize: 15 }}>同一个 prompt，采样 G = 8 个回答 → <span style={{ color: 'var(--muted)' }}>点击卡片切换 对/错</span></span>
+      <span style={{ marginLeft: 'auto', fontSize: 15 }}>均值 <b style={{ color: 'var(--accent)' }}>{mean.toFixed(3)}</b>　标准差 <b style={{ color: 'var(--accent)' }}>{std.toFixed(3)}</b></span>
       <button className="btn" onClick={() => setUseStd(u => !u)}>{useStd ? '÷ std：开（GRPO）' : '÷ std：关（Dr. GRPO）'}</button>
     </div>
     <svg viewBox={`0 0 ${W} ${H + 84}`} width="100%" style={{ display: 'block' }}>

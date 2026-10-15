@@ -3,7 +3,7 @@ import { useSlideStep } from './useSlideStep';
 import { C, reveal, Defs, Arrow, Box } from './parts';
 // steps: 0 rollout · 1 scoring (RM/Ref/Critic) · 2 PPO update · 3 weight sync
 export default function RLHFSystem() {
-  const [ref, s] = useSlideStep<SVGSVGElement>();
+  const [ref, s] = useSlideStep<SVGSVGElement>(3);
   const A = 'var(--accent)', I = 'var(--ink)', Gn = 'var(--green)';
   return (<svg ref={ref} viewBox="0 0 1410 560" width="100%" style={{ display: 'block' }}>
     <Defs />
@@ -20,17 +20,17 @@ export default function RLHFSystem() {
         {[0, 1, 2, 3, 4, 5, 6, 7].map(i => <rect key={i} x={18 + i * 27} y={112} width={20} height={20} rx={3} fill={C.accent} opacity={.25 + .09 * i} />)}
       </Box>
       <Box x={565} y={205} w={160} h={110} eyebrow="rollout buffer" name="(x, y)" sub="一批轨迹" />
-      <Arrow d="M182,260 L246,260" flow={s === 0} color={I} />
-      <Arrow d="M502,260 L561,260" flow={s === 0} color={A} />
+      <Arrow d="M182,260 L246,260" flow={s >= 0} color={I} />
+      <Arrow d="M502,260 L561,260" flow={s >= 0} color={A} />
     </motion.g>
 
     <motion.g {...reveal(s >= 1)}>
       <Box x={790} y={40} w={270} h={120} eyebrow="frozen · 偏好训练得到" name="Reward Model" sub="r_φ(x, y) → 标量" tone="green" />
       <Box x={790} y={200} w={270} h={120} eyebrow="frozen · = SFT 初始化" name="Reference π_ref" sub="log π_ref(y|x) → KL 惩罚" />
       <Box x={790} y={360} w={270} h={120} eyebrow="trainable" name="Critic V_ψ" sub="估计每个 token 的价值" />
-      <Arrow d="M727,250 C760,250 750,100 786,100" flow={s === 1} color={Gn} />
-      <Arrow d="M727,260 L786,260" flow={s === 1} color={I} />
-      <Arrow d="M727,270 C760,270 750,420 786,420" flow={s === 1} color={I} />
+      <Arrow d="M727,250 C760,250 750,100 786,100" flow={s >= 1} color={Gn} />
+      <Arrow d="M727,260 L786,260" flow={s >= 1} color={I} />
+      <Arrow d="M727,270 C760,270 750,420 786,420" flow={s >= 1} color={I} />
     </motion.g>
 
     <motion.g {...reveal(s >= 2)}>
@@ -38,9 +38,9 @@ export default function RLHFSystem() {
         <text x={18} y={132} className="mono" fontSize={15} fill="#e7e0d2">r_t = r_φ·1[t=T] − β·KL_t</text>
         <text x={18} y={156} className="mono" fontSize={15} fill="#e7e0d2">clip(ρ_t, 1±ε)·Â_t</text>
       </Box>
-      <Arrow d="M1062,100 C1110,100 1100,200 1146,210" flow={s === 2} color={Gn} label="r" lx={1112} ly={136} />
-      <Arrow d="M1062,260 L1146,260" flow={s === 2} color={I} label="KL" lx={1104} ly={250} />
-      <Arrow d="M1062,420 C1110,420 1100,320 1146,310" flow={s === 2} color={I} label="V(s)" lx={1112} ly={392} />
+      <Arrow d="M1062,100 C1110,100 1100,200 1146,210" flow={s >= 2} color={Gn} label="r" lx={1112} ly={136} />
+      <Arrow d="M1062,260 L1146,260" flow={s >= 2} color={I} label="KL" lx={1104} ly={250} />
+      <Arrow d="M1062,420 C1110,420 1100,320 1146,310" flow={s >= 2} color={I} label="V(s)" lx={1112} ly={392} />
     </motion.g>
 
     <motion.g {...reveal(s >= 3)}>

@@ -4,7 +4,7 @@ import { C, reveal } from './parts';
 const prompt = ['user', '什么', '是', 'KL', '散度', '？', 'asst'];
 const resp = ['KL', '散度', '衡量', '两个', '分布', '的', '差异', '…', 'eos'];
 export default function SFTMask() {
-  const [ref, s] = useSlideStep<SVGSVGElement>();
+  const [ref, s] = useSlideStep<SVGSVGElement>(2);
   const toks = [...prompt.map(t => ({ t, p: true })), ...resp.map(t => ({ t, p: false }))];
   let x = 0; const pos = toks.map(k => { const w = Math.max(44, k.t.length * (/^[a-z]+$/i.test(k.t) ? 12 : 22) + 20); const o = { ...k, x, w }; x += w + 6; return o; });
   const sc = 640 / x;

@@ -1,8 +1,10 @@
 ---
-const { title, n, caption, style = '' } = Astro.props;
+/** title: small heading above · n: figure number · caption: text below
+ *  wide: extend beyond the text column · replay: show a "重播" button (for animated diagrams) */
+const { title, n, caption, wide = false, replay = false, id } = Astro.props;
 ---
-<figure class="fig" style={style}>
-  {title && <header class="fig-heading">{title}</header>}
-  <slot />
+<figure class:list={['fig', { wide }]} id={id ?? (n ? `figure-${n}` : undefined)}>
+  {(title || replay) && <header class="fig-heading"><span>{title}</span>{replay && <button class="replay" type="button">↻ 重播</button>}</header>}
+  <div class="fig-body"><slot /></div>
   {caption && <figcaption><b>Figure {n}</b>{caption}</figcaption>}
 </figure>

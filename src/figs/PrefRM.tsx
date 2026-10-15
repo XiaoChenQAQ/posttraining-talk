@@ -2,7 +2,7 @@ import { motion } from 'motion/react';
 import { useSlideStep } from './useSlideStep';
 import { C, reveal, Defs, Arrow } from './parts';
 export default function PrefRM() {
-  const [ref, s] = useSlideStep<SVGSVGElement>();
+  const [ref, s] = useSlideStep<SVGSVGElement>(2);
   return (<svg ref={ref} viewBox="0 0 680 430" width="100%" style={{ display: 'block' }}>
     <Defs />
     <rect x={10} y={10} width={660} height={56} rx={8} fill={C.paper2} />

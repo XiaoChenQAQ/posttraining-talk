@@ -1,5 +1,5 @@
 ---
-import Deck from '../layouts/Deck.astro';
-import Talk, { frontmatter } from '../content/talk.mdx';
+import Article from '../layouts/Article.astro';
+import Post, { frontmatter, getHeadings } from '../content/post.mdx';
 ---
-<Deck title={frontmatter.title} brand={frontmatter.brand}><Talk /></Deck>
+<Article fm={frontmatter} headings={getHeadings()}><Post /></Article>

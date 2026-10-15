@@ -1,8 +1,0 @@
----
-const { kicker, title, steps = 0, cls = '' } = Astro.props;
----
-<section class={`slide ${cls}`} data-steps={steps}>
-  {kicker && <div class="kicker">{kicker}</div>}
-  {title && <h2>{title}</h2>}
-  <div class="body"><slot /></div>
-</section>

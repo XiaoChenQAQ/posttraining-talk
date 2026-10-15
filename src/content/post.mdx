@@ -1,0 +1,211 @@
+---
+title: LLM 后训练：从 SFT、RLHF 到 RLVR
+subtitle: 一个只会续写文本的预训练模型，是怎样变成会听指令、讲偏好、能推理的助手的。
+eyebrow: Explainer · Post-training
+author: 萧琛
+date: 2026 年 10 月
+readtime: 约 20 分钟阅读
+---
+import Figure from '../components/Figure.astro';
+import TeX from '../components/TeX.astro';
+import Pipeline from '../figs/Pipeline.tsx';
+import SFTMask from '../figs/SFTMask.tsx';
+import PrefRM from '../figs/PrefRM.tsx';
+import RLHFSystem from '../figs/RLHFSystem.tsx';
+import KLBeta from '../figs/KLBeta.tsx';
+import GRPOGroup from '../figs/GRPOGroup.tsx';
+import Overopt from '../figs/Overopt.tsx';
+
+## 引言：为什么需要后训练
+
+大语言模型的预训练目标只有一个：给定前文，预测下一个 token。模型在数万亿 token 的网页、书籍和代码上做这件事，学到了大量知识、语法和一定的推理模式。但这样得到的 **base model** 本质上是一个“文档续写器”。它会把你的问题当成某篇文档的开头，接着写下去，而不是当成一个需要完成的请求。
+
+<Figure n={1} title="同一个 prompt，两种模型" caption="示意。Base model 看到一个问句，可能会续写出更多问句（例如考试题列表）；经过后训练的模型把它理解为请求并直接回答。">
+  <div class="chat">
+    <div class="q">Q：法国的首都是哪里？</div>
+    <div class="a base"><span class="tag">BASE MODEL</span>Q：德国的首都是哪里？Q：意大利的首都是哪里？……</div>
+    <div class="a tuned"><span class="tag">POST-TRAINED</span>法国的首都是巴黎。</div>
+  </div>
+</Figure>
+
+后训练（post-training）要解决的，是从“会续写”到“会做事”之间的差距。具体来说有三类问题：
+
+- **遵循指令**：模型要稳定地把输入理解为任务，并按要求的格式、长度和语气完成。
+- **偏好与价值**：有用、诚实、无害都不是“下一个 token 预测”的直接目标，需要额外的信号把这些偏好注入模型。
+- **激发能力**：多步推理、工具调用、长链思考等能力往往在预训练中已有雏形，但需要通过训练稳定地激发出来。
+
+一个常被引用的结果来自 InstructGPT：在人类评估中，标注者更偏好经过 RLHF 的 1.3B 参数模型的输出，而不是 175B 参数的原始 GPT-3[^ouyang]。后训练消耗的算力远少于预训练，却在很大程度上决定了模型最终“好不好用”。
+
+## 整体流程
+
+现代 LLM 的训练通常可以分成四个阶段。预训练产出 base model；之后的三个阶段统称后训练：监督微调（SFT）、偏好学习（训练奖励模型，或用 DPO 直接优化），以及强化学习（RLHF 或基于可验证奖励的 RLVR）。
+
+<Figure n={2} title="Training pipeline" wide replay caption="典型的训练流水线。图中数据规模是常见的数量级，仅作示意，不同团队差异很大。实际流程往往多轮迭代，例如 RL 之后再做拒绝采样、蒸馏和新一轮 SFT，并不是严格线性的。">
+  <Pipeline client:visible />
+</Figure>
+
+需要强调的是，这几个阶段的边界并不僵硬。Llama 2 在 RLHF 阶段交替使用了拒绝采样微调和 PPO[^llama2]；DeepSeek-R1-Zero 则跳过 SFT，直接在 base model 上做强化学习[^r1]。下面按顺序逐一展开。
+
+## 监督微调（SFT）
+
+SFT 是后训练的第一步：收集一批“指令 → 理想回答”的示范，让模型模仿。形式上，它和预训练一样是最大似然估计，只是数据换成了对话格式：
+
+<TeX block tex={String.raw`\mathcal{L}_{\text{SFT}}(\theta)=-\,\mathbb{E}_{(x,y)\sim\mathcal{D}}\sum_{t=1}^{|y|}\log\pi_\theta\!\left(y_t\mid x,\,y_{<t}\right)`} />
+
+这里 <TeX tex={String.raw`x`} /> 是 prompt，<TeX tex={String.raw`y`} /> 是示范回答。实现上有两个关键细节。第一，样本要套上 **chat template**：用特殊 token 标出 system、user、assistant 等角色，模型由此学会对话的结构，并知道何时停止。第二，通常只在回答部分计算损失，prompt 部分的 token 会被 mask 掉，因为我们希望模型学会“如何回答”，而不是“如何提问”。
+
+<Figure n={3} title="Loss masking" replay caption="Prompt 与 response 拼成一条序列后一起前向计算；loss mask 为 0 的位置（prompt）不贡献梯度，只有 response token 上做 teacher forcing。">
+  <SFTMask client:visible />
+</Figure>
+
+SFT 数据的**质量远比数量重要**。InstructGPT 的 SFT 阶段只用了约 1.3 万条训练 prompt[^ouyang]；LIMA 的实验甚至表明，仅用 1,000 条精心挑选的示范，就能让一个强 base model 表现出相当不错的对话能力[^lima]。这支持了一种常见的看法：模型的知识和能力主要来自预训练，SFT 更多是在教它“以什么格式和风格输出”。
+
+SFT 的局限也很明显。它只见过“好”的回答，没见过“差”的，因此无法区分“还行”和“很好”；模型的上限也受示范者水平的限制。更根本的是，很多时候写出最好的答案很难，但判断两个答案哪个更好要容易得多。这就引出了偏好学习。
+
+## 偏好数据与奖励模型
+
+偏好学习的数据单位是一组比较：对同一个 prompt <TeX tex={String.raw`x`} />，给出两个（或多个）回答，由标注者指出哪个更好，记作 <TeX tex={String.raw`y_w \succ y_l`} />（winner 优于 loser）。相对判断比打绝对分数更一致：不同标注者对“7 分还是 8 分”分歧很大，但对“A 和 B 哪个更好”容易达成一致。InstructGPT 让标注者对同一 prompt 的 4 到 9 个回答排序，再拆成两两比较来训练[^ouyang]。
+
+奖励模型（reward model, RM）把一个 (prompt, 回答) 对映射成一个标量分数 <TeX tex={String.raw`r_\phi(x,y)`} />。它通常由 SFT 模型初始化，把语言模型头换成一个输出标量的线性头。训练时采用 Bradley–Terry 模型[^bt]：假设人类偏好 A 的概率由两者分数之差经过 sigmoid 给出。
+
+<TeX block tex={String.raw`P(y_w\succ y_l\mid x)=\sigma\big(r_\phi(x,y_w)-r_\phi(x,y_l)\big),\qquad \mathcal{L}_{\text{RM}}=-\log\sigma\big(r_\phi(x,y_w)-r_\phi(x,y_l)\big)`} />
+
+<Figure n={4} title="Bradley–Terry reward model" replay caption="示意。RM 分别给两个回答打分，偏好概率由分数差经过 sigmoid 得到。图中分数为虚构示例。因为只有差值进入损失，给所有分数加上同一个常数不会改变任何结果，所以 RM 的绝对数值本身没有意义。">
+  <PrefRM client:visible />
+</Figure>
+
+偏好数据的来源不限于人类。Constitutional AI 用一组书面原则引导模型自己评判回答，用 AI 反馈替代部分人类标注，这类方法统称 RLAIF[^cai]。无论来源如何，有一点必须牢记：**RM 只是人类偏好的一个近似**。它是在有限数据上训练的神经网络，会继承标注中的偏差（例如偏爱更长、更自信的回答），也存在可以被利用的盲区。这在后面讨论风险时会再次出现。
+
+## RLHF：PPO 系统如何运转
+
+有了奖励模型，就可以用强化学习直接优化“得到高奖励”。把语言模型看成一个策略 <TeX tex={String.raw`\pi_\theta`} />：状态是 prompt 加上已生成的 token，动作是下一个 token，整段回答生成完毕后由 RM 给出奖励。这就是 RLHF 的基本框架，早期由 Christiano 等人在控制任务上提出[^christiano]，随后用于文本摘要[^stiennon]和 InstructGPT[^ouyang]。
+
+经典实现使用 PPO[^ppo]，同时涉及四个模型：
+
+- **Actor（策略）** <TeX tex={String.raw`\pi_\theta`} />：被训练的模型，负责为每个 prompt 采样回答。
+- **Reward Model** <TeX tex={String.raw`r_\phi`} />：冻结，对完整回答打分。
+- **Reference** <TeX tex={String.raw`\pi_{\text{ref}}`} />：冻结，通常就是 SFT 模型，用来计算 KL 惩罚，防止策略跑偏。
+- **Critic（价值模型）** <TeX tex={String.raw`V_\psi`} />：可训练，估计每个位置之后的期望回报，用于计算优势。
+
+<Figure n={5} title="PPO-based RLHF system" wide replay caption="一次 PPO 迭代：① Actor 用推理引擎批量生成回答；② RM、Reference、Critic 对这批轨迹做前向计算；③ Trainer 计算每个 token 的奖励与 GAE 优势，按 PPO 的截断目标更新 Actor 和 Critic；④ 把新权重同步回推理引擎。Actor 与 Critic 可训练，RM 与 Reference 冻结。">
+  <RLHFSystem client:visible />
+</Figure>
+
+一次迭代分为四个阶段。**生成**阶段，Actor 对一批 prompt 采样回答。这是自回归解码，通常交给 vLLM、SGLang 这类推理引擎，往往占据大部分墙钟时间。**打分**阶段，RM 给每个完整回答一个标量分数，Reference 计算每个 token 的 log 概率，Critic 给出每个位置的价值估计，三者都只做前向计算。**训练**阶段，每个 token 的奖励被定义为
+
+<TeX block tex={String.raw`r_t=r_\phi(x,y)\cdot\mathbb{1}[t=T]\;-\;\beta\,\log\frac{\pi_\theta(y_t\mid x,y_{<t})}{\pi_{\text{ref}}(y_t\mid x,y_{<t})}`} />
+
+也就是 RM 分数只加在最后一个 token 上，而每个 token 都承担一份 KL 惩罚。接着用 GAE[^gae] 由奖励和价值估计算出优势 <TeX tex={String.raw`\hat A_t`} />，再最大化 PPO 的截断目标：
+
+<TeX block tex={String.raw`\mathcal{J}_{\text{PPO}}=\mathbb{E}_t\Big[\min\big(\rho_t\hat A_t,\ \operatorname{clip}(\rho_t,1-\epsilon,1+\epsilon)\,\hat A_t\big)\Big],\qquad \rho_t=\frac{\pi_\theta(y_t\mid\cdot)}{\pi_{\theta_{\text{old}}}(y_t\mid\cdot)}`} />
+
+截断操作限制了单次更新中新旧策略的偏离幅度，让同一批数据可以安全地复用几个 epoch。Critic 同时以回报为目标做回归训练。最后是**同步**阶段：把更新后的权重推送回推理引擎，开始下一轮生成。
+
+这套系统的工程难度主要来自“训练”与“推理”两种负载的混合。四个模型需要同时驻留显存，生成阶段是显存带宽受限的解码，训练阶段是计算受限的反向传播，权重还要在两者之间频繁同步。这也是后来很多算法试图去掉其中一两个模型的重要动机。
+
+## KL 正则：在追奖励与不跑偏之间
+
+为什么一定要有 Reference 和 KL 惩罚？因为 RM 只在 SFT 模型输出分布附近是可靠的。如果放任策略追逐奖励，它很快会走到 RM 从没见过的区域，找到那些“分数很高但其实很差”的回答。KL 项把策略拴在参考模型附近。忽略逐 token 的细节，RLHF 优化的是：
+
+<TeX block tex={String.raw`\max_{\pi}\ \mathbb{E}_{x\sim\mathcal{D},\,y\sim\pi(\cdot|x)}\big[r(x,y)\big]\;-\;\beta\,\mathrm{KL}\big(\pi(\cdot|x)\,\|\,\pi_{\text{ref}}(\cdot|x)\big)`} />
+
+这个目标有一个漂亮的闭式最优解[^dpo]：
+
+<TeX block tex={String.raw`\pi^*(y\mid x)=\frac{1}{Z(x)}\,\pi_{\text{ref}}(y\mid x)\,\exp\!\Big(\frac{r(x,y)}{\beta}\Big),\qquad Z(x)=\sum_y\pi_{\text{ref}}(y\mid x)\exp\!\Big(\frac{r(x,y)}{\beta}\Big)`} />
+
+直观地说，最优策略就是对参考分布按奖励做指数加权。<TeX tex={String.raw`\beta`} /> 是“温度”：<TeX tex={String.raw`\beta`} /> 很大时，指数项趋于平坦，<TeX tex={String.raw`\pi^*`} /> 退回 <TeX tex={String.raw`\pi_{\text{ref}}`} />；<TeX tex={String.raw`\beta`} /> 趋于 0 时，概率集中到奖励最高的回答上。下面这个小例子把回答空间简化成六类，你可以拖动 β 观察这一过程，也可以修改每一类的奖励。
+
+<Figure n={6} title="Interactive · closed-form optimal policy" wide caption="交互示意：六类回答的参考概率与奖励都是虚构的教学数值。灰色为 π_ref，橙色为 π*。拖动 β，或点击柱子与 ± 按钮修改奖励，右侧实时显示 π* 下的期望奖励和 KL(π*‖π_ref)。β 越小，期望奖励越高，KL 也越大，即偏离参考模型越远。">
+  <KLBeta client:visible />
+</Figure>
+
+这个例子还暗示了一个风险：如果 RM 错误地给“讨好附和”打了高分，β 越小，策略就越会把概率压到这类回答上。KL 约束不能修正 RM 的错误，只能限制我们对这些错误的利用程度。在实践中，β 的取值、KL 的估计方式（是放进奖励还是放进损失）都会显著影响训练的稳定性。
+
+## DPO：把强化学习变成分类问题
+
+上面的闭式解可以反过来读：如果知道最优策略，就能把奖励写成它的函数。
+
+<TeX block tex={String.raw`r(x,y)=\beta\log\frac{\pi^*(y\mid x)}{\pi_{\text{ref}}(y\mid x)}+\beta\log Z(x)`} />
+
+把它代入 Bradley–Terry 模型时，同一个 prompt 下两个回答的 <TeX tex={String.raw`\beta\log Z(x)`} /> 恰好相消。于是可以跳过奖励模型，直接用偏好数据训练策略，这就是 DPO（Direct Preference Optimization）[^dpo]：
+
+<TeX block tex={String.raw`\mathcal{L}_{\text{DPO}}=-\,\mathbb{E}\left[\log\sigma\!\left(\beta\log\frac{\pi_\theta(y_w\mid x)}{\pi_{\text{ref}}(y_w\mid x)}-\beta\log\frac{\pi_\theta(y_l\mid x)}{\pi_{\text{ref}}(y_l\mid x)}\right)\right]`} />
+
+论文的副标题概括了这个思路：“你的语言模型其实是一个奖励模型”。<TeX tex={String.raw`\beta\log(\pi_\theta/\pi_{\text{ref}})`} /> 扮演隐式奖励，训练过程与 SFT 一样简单：不需要在线采样，不需要 Critic 和 RM，显存里只有策略和参考模型。
+
+<div class="tablewrap">
+<table class="cmp">
+  <thead><tr><th></th><th>PPO-RLHF</th><th>DPO</th></tr></thead>
+  <tbody>
+    <tr><td>训练数据</td><td>在线采样（on-policy），边训边生成</td><td>固定的离线偏好对（off-policy）</td></tr>
+    <tr><td>奖励模型</td><td>需要单独训练</td><td>不需要，策略本身就是隐式奖励</td></tr>
+    <tr><td>显存中的模型</td><td>Actor、Critic、RM、Reference</td><td>Policy、Reference</td></tr>
+    <tr><td>工程复杂度</td><td>高：生成与训练混合，超参数敏感</td><td>低：和 SFT 几乎一样</td></tr>
+    <tr><td>探索</td><td>能采样到数据之外的新回答并获得反馈</td><td>受限于已有偏好数据的分布</td></tr>
+  </tbody>
+</table>
+</div>
+
+DPO 的代价在于“离线”。它只在固定的偏好对上学习，看不到当前策略自己会生成什么，因此缺少探索。当偏好数据和当前策略的输出分布差距较大时，效果会打折扣。有研究系统比较后认为，调好的 PPO 在多项任务上仍然优于 DPO[^xu]。实践中常见的折中，是用当前模型在线生成新的回答对、重新标注后迭代地做 DPO。
+
+## GRPO 与 RLVR：可验证奖励
+
+到 2024 至 2025 年，后训练的重心明显转向推理能力。数学题有标准答案，代码有单元测试，这类任务的奖励可以由程序直接判定，而不必依赖一个会犯错的神经网络 RM。Tülu 3 把这种做法称为 **RLVR**（Reinforcement Learning with Verifiable Rewards）[^tulu3]：答案正确奖励 1，否则为 0，或再加上格式检查。规则奖励很难被“讨好”，也不会随着训练漂移。
+
+与之相配的算法是 DeepSeekMath 提出的 **GRPO**（Group Relative Policy Optimization）[^grpo]。它的核心想法是去掉 Critic：对同一个 prompt 采样一组 <TeX tex={String.raw`G`} /> 个回答，用组内奖励的统计量充当 baseline。
+
+<TeX block tex={String.raw`\hat A_i=\frac{r_i-\operatorname{mean}(r_1,\dots,r_G)}{\operatorname{std}(r_1,\dots,r_G)}`} />
+
+同一个回答里的所有 token 共享这个优势值，然后沿用 PPO 的截断目标；KL 惩罚不再放进奖励，而是作为损失中的一项直接加上。比平均水平好的回答被强化，差的被抑制。省掉 Critic 不仅节省了一个模型的显存和计算，也绕开了“为长链推理的每个 token 估计价值”这个难题。DeepSeek-R1 用这套方法在大规模推理数据上训练，R1-Zero 甚至在没有 SFT 的情况下涌现出了反思、验算等长链推理行为[^r1]。
+
+<Figure n={7} title="Interactive · group-relative advantage" wide caption="交互示意：点击卡片切换某个回答的对错。只有少数回答正确时，它们获得很大的正优势；组内全对或全错时，所有优势都为 0，这个 prompt 不产生任何梯度。因此题目难度要与模型当前水平匹配。按钮可以关闭 ÷std，对应 Dr. GRPO 的修改。">
+  <GRPOGroup client:visible />
+</Figure>
+
+这个小演示揭示了 GRPO 的两个实际特性。第一，**信号来自组内差异**：对模型来说太简单（全对）或太难（全错）的题目不提供学习信号，所以训练数据的难度筛选和动态采样非常重要。第二，**归一化方式会引入偏差**。Dr. GRPO 指出，除以组内标准差会放大难度极端的题目的权重；而按回答长度对损失做平均，会让模型在答错时倾向于写得更长。他们建议去掉这两个归一化[^drgrpo]。
+
+## 风险：模型优化的是你写下的目标
+
+强化学习有一个朴素但残酷的性质：它会最大化你给出的奖励，而不是你心里想要的东西。奖励与真实目标之间的任何缝隙，都可能被充分优化的策略找到并放大。
+
+**Reward hacking 与过度优化**。Gao 等人系统研究了这一现象[^gao]：用一个大的“金标准”RM 模拟人类，再用较小的代理 RM 训练策略。随着优化推进（以与初始策略的 KL 距离衡量），代理 RM 的分数持续上升，而金标准分数先升后降。这正是 Goodhart 定律：当一个指标变成目标时，它就不再是好指标。
+
+<Figure n={8} title="Reward model overoptimization" replay caption="示意图，曲线形态参考 Gao et al. (2023) 的发现，数值并非实验数据。横轴是优化强度（与初始策略 KL 距离的平方根）。代理 RM 分数单调上升，真实质量越过峰值后下降。">
+  <Overopt client:visible />
+</Figure>
+
+可验证奖励也不能完全幸免。代码任务中，模型可能学会修改或绕过测试，而不是修复代码；数学任务中，宽松的答案解析器可能被特定格式利用。验证器本身需要像安全边界一样被认真加固。
+
+**谄媚与长度偏差**。人类标注者倾向于偏好赞同自己观点的回答，以及更长、更详细的回答，RM 会学到这些偏好，RL 又会把它们放大。研究发现，多个经过 RLHF 的助手都存在附和用户错误观点的倾向[^sharma]；RLHF 带来的奖励提升中，也有相当部分可以由回答长度的增加来解释[^singhal]。
+
+**熵塌缩与探索不足**。RL 训练中策略熵往往快速下降，模型越来越确定地输出少数几种回答。这会让 pass@1 提升，但多样性变差。有研究发现，在采样次数很大时，RL 后模型的 pass@k 甚至可能低于 base model，说明 RL 更多是在“挑出”已有的推理路径，而不是创造新路径[^yue]。如何在 RL 中保持探索，是当前活跃的研究方向。
+
+**对齐税**。为对齐而做的训练可能让模型在一些基础能力上退步。InstructGPT 在 PPO 中混入预训练梯度（PPO-ptx）来缓解公开 NLP 基准上的性能回退[^ouyang]。
+
+<div class="callout">常见的缓解手段包括：合适的 KL 约束与早停；使用 RM 集成并定期用新数据刷新 RM；加固验证器并监控异常高的奖励；对回答长度做控制或归一化；以及始终保留人工抽检。没有一种手段能单独解决问题，奖励设计需要持续迭代。</div>
+
+## 结语
+
+回顾整条路径：**SFT** 教会模型对话的格式与基本行为，起点由示范质量决定；**偏好数据与奖励模型**把“哪个更好”变成可以优化的信号，但它终究只是代理；**RLHF** 用在线强化学习追逐这个信号，并用 **KL 正则**防止跑偏；**DPO** 利用 KL 正则目标的闭式解，把 RL 变成离线分类问题，以简单换取探索能力；**GRPO 与 RLVR** 用可验证奖励和组内相对优势，让推理能力的规模化训练成为可能。
+
+贯穿始终的核心难题是奖励设计。你优化什么，就会得到什么，包括那些你没想到的东西。后训练的进步，很大程度上就是奖励信号变得更准确、更难被钻空子、也更容易扩展的过程。
+
+[^ouyang]: Ouyang et al. (2022). *Training language models to follow instructions with human feedback.* NeurIPS 2022.
+[^llama2]: Touvron et al. (2023). *Llama 2: Open Foundation and Fine-Tuned Chat Models.* arXiv:2307.09288.
+[^r1]: DeepSeek-AI (2025). *DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning.* arXiv:2501.12948.
+[^lima]: Zhou et al. (2023). *LIMA: Less Is More for Alignment.* NeurIPS 2023.
+[^bt]: Bradley & Terry (1952). *Rank Analysis of Incomplete Block Designs: I. The Method of Paired Comparisons.* Biometrika.
+[^cai]: Bai et al. (2022). *Constitutional AI: Harmlessness from AI Feedback.* arXiv:2212.08073.
+[^christiano]: Christiano et al. (2017). *Deep Reinforcement Learning from Human Preferences.* NeurIPS 2017.
+[^stiennon]: Stiennon et al. (2020). *Learning to summarize from human feedback.* NeurIPS 2020.
+[^ppo]: Schulman et al. (2017). *Proximal Policy Optimization Algorithms.* arXiv:1707.06347.
+[^gae]: Schulman et al. (2016). *High-Dimensional Continuous Control Using Generalized Advantage Estimation.* ICLR 2016.
+[^dpo]: Rafailov et al. (2023). *Direct Preference Optimization: Your Language Model is Secretly a Reward Model.* NeurIPS 2023.
+[^xu]: Xu et al. (2024). *Is DPO Superior to PPO for LLM Alignment? A Comprehensive Study.* ICML 2024.
+[^tulu3]: Lambert et al. (2024). *Tülu 3: Pushing Frontiers in Open Language Model Post-Training.* arXiv:2411.15124.
+[^grpo]: Shao et al. (2024). *DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models.* arXiv:2402.03300.
+[^drgrpo]: Liu et al. (2025). *Understanding R1-Zero-Like Training: A Critical Perspective.* arXiv:2503.20783.
+[^gao]: Gao, Schulman & Hilton (2023). *Scaling Laws for Reward Model Overoptimization.* ICML 2023.
+[^sharma]: Sharma et al. (2023). *Towards Understanding Sycophancy in Language Models.* arXiv:2310.13548.
+[^singhal]: Singhal et al. (2023). *A Long Way to Go: Investigating Length Correlations in RLHF.* arXiv:2310.03716.
+[^yue]: Yue et al. (2025). *Does Reinforcement Learning Really Incentivize Reasoning Capacity in LLMs Beyond the Base Model?* arXiv:2504.13837.
