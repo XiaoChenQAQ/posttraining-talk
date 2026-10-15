@@ -64,3 +64,6 @@
 .tl-strat{font-size:clamp(12.5px,1.02vw,14px)}
 .tl-tag{font-size:clamp(10.5px,.85vw,12px);padding:5px 7px}
 .tl-date{font-size:12px}
+.tl-cl{margin-left:6px;font:600 9.5px/1 "PingFang SC",sans-serif;letter-spacing:.05em;color:var(--mut);border:1px solid var(--line);border-radius:3px;padding:1px 3px;vertical-align:1px}
+.tl-model{font-size:clamp(14.5px,1.3vw,18.5px)}
+.tl-tags{gap:5px}.tl-tag{padding:5px 6px}

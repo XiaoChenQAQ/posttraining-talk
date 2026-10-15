@@ -37,7 +37,7 @@ export default function Timeline({ nodes = NODES, variant = 'A', placeholder = P
               onMouseEnter={() => setHover(nd.id)} onMouseLeave={() => setHover(null)}
               onClick={() => setPinned(p => p === nd.id ? null : nd.id)}>
               <div className="tl-top">
-                <div className="tl-date">{nd.date}</div>
+                <div className="tl-date">{nd.date}{nd.closed && <span className="tl-cl" title="闭源厂商公开的方法">闭源</span>}</div>
                 <div className={`tl-model ${placeholder ? 'ph' : ''}`}>{nd.model}</div>
                 <div className="tl-prob">{nd.problem}</div>
               </div>

@@ -1,10 +1,11 @@
-# 开场时间轴 · 来源与取舍（v3，2026-10-15）
+# 开场时间轴 · 来源与取舍（v4，2026-10-15）
 
 原则：节点是**代表模型**，标签是该模型**采用**的技术（不代表首创，也不代表淘汰旧方法）。日期取 arXiv v1 提交日或官方发布日。以下链接均于 2026-10-15 确认能打开；OpenAI 页面用 curl 会被 403，用 WebFetch 能正常读取。灰色虚线标签表示未公开的信息或基础设施，不归入任何信号来源。
 
 | # | 节点 | 日期 | 一手来源 | 依据 |
 |---|---|---|---|---|
 | 1 | InstructGPT | 2022.03 | [arXiv 2203.02155](https://arxiv.org/abs/2203.02155)，v1 2022-03-04 | 三步：示范 SFT → 比较数据训练 RM → 用 PPO 优化 RM |
+| 1b | Constitutional AI（Anthropic，闭源） | 2022.12 | [arXiv 2212.08073](https://arxiv.org/abs/2212.08073)，v1 2022-12-15；[Anthropic 官方页](https://www.anthropic.com/research/constitutional-ai-harmlessness-from-ai-feedback)；[Claude's Constitution](https://www.anthropic.com/news/claudes-constitution) | "In the supervised phase we sample from an initial model, then generate self-critiques and revisions, and then finetune the original model on revised responses. In the RL phase…use a model to evaluate which of the two samples is better, and then train a preference model from this dataset of AI preferences…'RL from AI Feedback' (RLAIF)"；人类监督只体现在一份原则列表（宪法）里 |
 | 2 | Zephyr-7B | 2023.10 | [arXiv 2310.16944](https://arxiv.org/abs/2310.16944)，v1 2023-10-25 | dDPO，偏好数据来自 AI 反馈（"requires no human annotation"） |
 | 3 | OpenAI o1 | 2024.09 | [OpenAI 博客 2024-09-12](https://openai.com/index/learning-to-reason-with-llms/) | "large-scale reinforcement learning algorithm teaches the model how to think…chain of thought"；奖励和算法未公开 |
 | 4 | DeepSeek-R1 | 2025.01 | [arXiv 2501.12948](https://arxiv.org/abs/2501.12948)，v1 2025-01-22 | GRPO + "rule-based rewards…mathematical, coding, and logical reasoning" |
@@ -24,6 +25,8 @@
 - OPD：Qwen3，[arXiv 2505.09388](https://arxiv.org/abs/2505.09388)，§4.5；[Thinking Machines 博客](https://thinkingmachines.ai/blog/on-policy-distillation/)，2025-10。
 
 ## 存疑与取舍
+- **闭源标识**：InstructGPT、Constitutional AI、o1 的日期旁有一个小「闭源」标，表示这是闭源厂商公开的方法。CAI 是一篇方法论文，不是某个具体的发布模型；论文里也没有明确说某个 Claude 版本用了完全相同的配方，所以节点名用方法名。
+- **CAI 的信号分类**：自我修订 SFT 归在「示范」类（示范是模型自己修订出来的）；RLAIF 归在「偏好」类，但偏好来自 AI，注释里写明了。
 - **MiniMax 选 M1 而不是 M2**：M2 系列报告（[arXiv 2605.26494](https://arxiv.org/abs/2605.26494)，2026-05-26）覆盖 M2 到 M2.7，用 Forge 智能体 RL 系统 + CISPO + 过程奖励 / reward-to-go。但 M2 模型的实际发布早于报告，报告里也没有给出单一日期，所以选了日期清楚、而且提出 CISPO 的 M1。
 - **GLM 选 4.5 而不是 5**：用户点名的「专家模型 + 统一蒸馏、slime」出自 GLM-4.5。GLM-4.5 的统一阶段是 SFT 形式的自蒸馏，不是 on-policy，所以标签写「自蒸馏合并」，不写 OPD。GLM-5（[arXiv 2602.15763](https://arxiv.org/abs/2602.15763)，2026-02-17）改成了 GRPO 系 RL（Reasoning → Agentic → General），最后一步是 On-Policy Cross-Stage Distillation，继续用 slime，可以替换 GLM-4.5。
 - **DeepSeek-V4 的日期**：arXiv 编号是 2606，但 v1 显示的提交日期是 2026-04-26，两者对不上，需要到 DeepSeek 官方渠道再核。
