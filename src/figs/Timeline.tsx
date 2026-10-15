@@ -19,8 +19,8 @@ export default function Timeline({ nodes = NODES, variant = 'A', placeholder = P
   const used = order.filter(s => nodes.some(n => n.techs.some(t => t.signal === s)));
   const n = nodes.length;
   // B: 每个节点主信号（出现最多者）用于轴下色带
-  const main = (nd: TLNode) => { const c: Record<string, number> = {}; nd.techs.forEach(t => c[t.signal] = (c[t.signal] || 0) + 1); return Object.entries(c).sort((a, b) => b[1] - a[1])[0][0] as Signal; };
-  const stops = nodes.map((nd, i) => `${SIGNALS[main(nd)].color} ${((i + .5) / n * 100).toFixed(1)}%`).join(',');
+  const main = (nd: TLNode) => { const c: Record<string, number> = {}; nd.techs.forEach(t => { if (t.signal) c[t.signal] = (c[t.signal] || 0) + 1; }); const e = Object.entries(c).sort((a, b) => b[1] - a[1])[0]; return e ? e[0] as Signal : null; };
+  const stops = nodes.map((nd, i) => `${(main(nd) ? SIGNALS[main(nd)!].color : '#8a8273')} ${((i + .5) / n * 100).toFixed(1)}%`).join(',');
 
   return (
     <div ref={ref} key={key} className={`tl tl-${variant} ${shown ? 'on' : ''} ${active || sig ? 'focus' : ''}`} style={{ ['--n' as any]: n }}>
@@ -33,7 +33,7 @@ export default function Timeline({ nodes = NODES, variant = 'A', placeholder = P
           const hit = sig ? nd.techs.some(t => t.signal === sig) : false;
           const lit = active ? isA : sig ? hit : true;
           return (
-            <div key={nd.id} className={`tl-col ${lit ? 'lit' : 'dim'} ${isA ? 'act' : ''}`} style={{ ['--i' as any]: i }}
+            <div key={nd.id} title={nd.note} className={`tl-col ${lit ? 'lit' : 'dim'} ${isA ? 'act' : ''}`} style={{ ['--i' as any]: i }}
               onMouseEnter={() => setHover(nd.id)} onMouseLeave={() => setHover(null)}
               onClick={() => setPinned(p => p === nd.id ? null : nd.id)}>
               <div className="tl-top">
@@ -41,13 +41,13 @@ export default function Timeline({ nodes = NODES, variant = 'A', placeholder = P
                 <div className={`tl-model ${placeholder ? 'ph' : ''}`}>{nd.model}</div>
                 <div className="tl-prob">{nd.problem}</div>
               </div>
-              <div className="tl-dot"><span style={variant === 'B' ? { borderColor: SIGNALS[main(nd)].color } : undefined} /></div>
+              <div className="tl-dot"><span style={variant === 'B' && main(nd) ? { borderColor: SIGNALS[main(nd)!].color } : undefined} /></div>
               <div className="tl-bot">
-                <div className="tl-strat">{nd.strategy}</div>
+                <div className="tl-strat">{nd.strategy}{nd.note && <sup className="tl-nm" title={nd.note}>*</sup>}</div>
                 <div className="tl-tags">
                   {nd.techs.map(t => {
-                    const s = SIGNALS[t.signal]; const off = sig && sig !== t.signal;
-                    return <span key={t.name} className={`tl-tag ${off ? 'off' : ''}`} style={{ ['--c' as any]: s.color, ['--s' as any]: s.soft }}>{t.name}</span>;
+                    const s = t.signal ? SIGNALS[t.signal] : { color: '#8a8273', soft: '#ece7dd' }; const off = sig && sig !== t.signal;
+                    return <span key={t.name} className={`tl-tag ${off ? 'off' : ''} ${t.signal ? '' : 'na'}`} style={{ ['--c' as any]: s.color, ['--s' as any]: s.soft }}>{t.name}</span>;
                   })}
                 </div>
               </div>

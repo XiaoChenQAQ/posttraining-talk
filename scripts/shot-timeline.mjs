@@ -16,7 +16,7 @@ for (const [w, h, tag] of [[1440, 900, '1440'], [1280, 720, '1280']]) {
     await A.locator('.tl-sig').nth(1).hover(); await pg.waitForTimeout(500);
     await A.screenshot({ path: out + 'timeline-A-hover-signal.png' });
   }
-  await B.scrollIntoViewIfNeeded(); await pg.waitForTimeout(2800);
+  await pg.mouse.move(2,2); await B.scrollIntoViewIfNeeded(); await pg.waitForTimeout(2800);
   await B.screenshot({ path: out + `timeline-B-${tag}.png` });
   if (tag === '1440') { await B.locator('.tl-sig').nth(2).hover(); await pg.waitForTimeout(500); await B.screenshot({ path: out + 'timeline-B-hover-signal.png' }); }
   if (tag === '1280') { await pg.evaluate(() => scrollTo(0, 0)); await pg.screenshot({ path: out + 'timeline-page-1280x720.png' }); }

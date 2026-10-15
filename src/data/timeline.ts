@@ -7,20 +7,31 @@ export const SIGNALS: Record<Signal, { label: string; desc: string; color: strin
   env:     { label: '环境反馈', desc: '在工具/环境里做成没有', color: '#8a6bb0', soft: '#e9e2f2' },
   teacher: { label: '教师模型', desc: '更强模型给逐 token 指导', color: '#b08a2e', soft: '#f1e8cf' },
 };
-export type Tech = { name: string; signal: Signal };
-export type TLNode = { id: string; model: string; date: string; problem: string; strategy: string; techs: Tech[] };
-export const PLACEHOLDER = true;
+export type Tech = { name: string; signal?: Signal };   // 无 signal = 未公开/不归类（灰色）
+export type TLNode = { id: string; model: string; date: string; problem: string; strategy: string; techs: Tech[]; note?: string };
+export const PLACEHOLDER = false;
+// 来源与引文见 docs/timeline-sources.md。标注的是该模型「采用」的方法，不是发明。
 export const NODES: TLNode[] = [
-  { id: 'a', model: '模型 A', date: '20XX', problem: '让模型听懂指令', strategy: '指令微调',
-    techs: [{ name: 'SFT', signal: 'demo' }, { name: '指令数据', signal: 'demo' }] },
-  { id: 'b', model: '模型 B', date: '20XX', problem: '回答要有用且无害', strategy: '人类反馈强化学习',
-    techs: [{ name: 'SFT', signal: 'demo' }, { name: '奖励模型', signal: 'pref' }, { name: 'RLHF / PPO', signal: 'pref' }] },
-  { id: 'c', model: '模型 C', date: '20XX', problem: '对齐流程太重太贵', strategy: '直接偏好优化',
-    techs: [{ name: 'DPO', signal: 'pref' }, { name: '偏好对', signal: 'pref' }] },
-  { id: 'd', model: '模型 D', date: '20XX', problem: '让模型学会推理', strategy: '可验证奖励 RL',
-    techs: [{ name: 'GRPO', signal: 'verify' }, { name: 'RLVR', signal: 'verify' }, { name: '长思维链', signal: 'verify' }] },
-  { id: 'e', model: '模型 E', date: '20XX', problem: '会用工具、能做完任务', strategy: '环境中强化学习',
-    techs: [{ name: 'Env RL', signal: 'env' }, { name: '多轮交互', signal: 'env' }] },
-  { id: 'f', model: '模型 F', date: '20XX', problem: '小模型也要学得好', strategy: '在线策略蒸馏',
-    techs: [{ name: 'OPD', signal: 'teacher' }, { name: 'RL', signal: 'verify' }] },
+  { id: 'flan', model: 'FLAN', date: '2021.09', problem: '不会听指令', strategy: '指令微调',
+    techs: [{ name: 'SFT', signal: 'demo' }, { name: '多任务指令', signal: 'demo' }] },
+  { id: 'instructgpt', model: 'InstructGPT', date: '2022.03', problem: '不符合人的意图', strategy: 'SFT + RLHF',
+    techs: [{ name: 'SFT', signal: 'demo' }, { name: '奖励模型', signal: 'pref' }, { name: 'PPO', signal: 'pref' }] },
+  { id: 'alpaca', model: 'Alpaca', date: '2023.03', problem: '低成本复现对话', strategy: '合成指令 SFT',
+    techs: [{ name: 'Self-Instruct', signal: 'demo' }, { name: 'LoRA 生态', signal: 'demo' }],
+    note: 'Alpaca 官方为全参微调；LoRA 来自社区复现 alpaca-lora' },
+  { id: 'llama2', model: 'Llama 2-Chat', date: '2023.07', problem: '开源也要安全有用', strategy: '迭代 RLHF',
+    techs: [{ name: '奖励模型', signal: 'pref' }, { name: '拒绝采样', signal: 'pref' }, { name: 'PPO', signal: 'pref' }] },
+  { id: 'zephyr', model: 'Zephyr-7B', date: '2023.10', problem: 'RLHF 太贵太重', strategy: '直接偏好优化',
+    techs: [{ name: 'DPO', signal: 'pref' }, { name: 'AI 偏好数据', signal: 'pref' }],
+    note: '偏好标签由 GPT-4 打分（AI 反馈），非人工' },
+  { id: 'o1', model: 'OpenAI o1', date: '2024.09', problem: '先想再答', strategy: '大规模 RL 推理',
+    techs: [{ name: '长思维链' }, { name: '细节未公开' }], note: '官方仅称用大规模 RL 训练思维链，奖励与算法未公开' },
+  { id: 'r1', model: 'DeepSeek-R1', date: '2025.01', problem: '公开复现推理', strategy: '可验证奖励 RL',
+    techs: [{ name: 'GRPO', signal: 'verify' }, { name: '规则奖励', signal: 'verify' }],
+    note: 'GRPO 提出于 DeepSeekMath (2024.02)；RLVR 一词由 Tülu 3 (2024.11) 命名' },
+  { id: 'k2', model: 'Kimi K2', date: '2025.07', problem: '用工具做完任务', strategy: '智能体 RL',
+    techs: [{ name: '环境交互 RL', signal: 'env' }, { name: '智能体数据合成', signal: 'env' }, { name: 'RLVR', signal: 'verify' }] },
+  { id: 'v4', model: 'DeepSeek-V4', date: '2026.04', problem: '多个专家合为一', strategy: '多教师在线蒸馏',
+    techs: [{ name: '专家 GRPO', signal: 'verify' }, { name: 'OPD', signal: 'teacher' }],
+    note: 'OPD 取代 V3.2 的混合 RL 阶段；student 优化对多教师的 reverse KL' },
 ];

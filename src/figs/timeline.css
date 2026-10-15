@@ -53,3 +53,14 @@
 .tl-B .tl-foot{border-color:#2e2b26} .tl-B .tl-sig{color:#cfc8bb} .tl-B .tl-note b{color:#cfc8bb} .tl-B .tl-replay{border-color:#3a362f}
 .tl-band{grid-row:2;grid-column:1/-1;align-self:center;height:4px;margin-top:20px;border-radius:2px;opacity:0;transition:opacity .8s 1.4s;mask:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent)}
 .on .tl-band{opacity:.75}
+
+.tl-tag.na{border-style:dashed;background:transparent}
+.tl-nm{color:#c0612f;font-weight:700;margin-left:2px}
+/* density for 8+ nodes */
+.tl{padding-left:24px;padding-right:24px}
+.tl-top,.tl-dot,.tl-bot{padding:0 4px}
+.tl-model{font-size:clamp(15px,1.35vw,19px);white-space:nowrap}
+.tl-prob{font-size:clamp(12.5px,1.05vw,14.5px)}
+.tl-strat{font-size:clamp(12.5px,1.02vw,14px)}
+.tl-tag{font-size:clamp(10.5px,.85vw,12px);padding:5px 7px}
+.tl-date{font-size:12px}
