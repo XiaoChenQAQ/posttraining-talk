@@ -1,0 +1,6 @@
+---
+import katex from 'katex';
+const { tex, block = false } = Astro.props;
+const html = katex.renderToString(tex, { displayMode: block, throwOnError: false });
+---
+{block ? <div class="tex-block" set:html={html} /> : <span set:html={html} />}

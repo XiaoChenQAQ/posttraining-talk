@@ -1,0 +1,8 @@
+---
+const { title, n, caption, style = '' } = Astro.props;
+---
+<figure class="fig" style={style}>
+  {title && <header class="fig-heading">{title}</header>}
+  <slot />
+  {caption && <figcaption><b>Figure {n}</b>{caption}</figcaption>}
+</figure>

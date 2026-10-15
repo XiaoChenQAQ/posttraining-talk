@@ -1,0 +1,63 @@
+---
+import '@fontsource/inter/400.css';
+import '@fontsource/inter/600.css';
+import '@fontsource/inter/700.css';
+import '@fontsource/jetbrains-mono/400.css';
+import '@fontsource/jetbrains-mono/600.css';
+import 'katex/dist/katex.min.css';
+import '../styles/theme.css';
+const { title = 'Slides', brand = '' } = Astro.props;
+---
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>{title}</title>
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--ink)" /></marker>
+    <marker id="ah-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--accent)" /></marker>
+    <marker id="ah-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--green)" /></marker>
+  </defs></svg>
+  <div id="stage"><div id="deck" data-brand={brand}><slot /></div></div>
+  <div id="hud"><div id="bar"></div></div>
+  <script>
+    const deck = document.getElementById('deck')!;
+    const slides = Array.from(deck.querySelectorAll<HTMLElement>(':scope > .slide'));
+    const brand = deck.dataset.brand || '';
+    slides.forEach((s, i) => {
+      const p = document.createElement('div'); p.className = 'pageno'; p.textContent = `${i + 1} / ${slides.length}`; s.appendChild(p);
+      if (brand && i > 0) { const b = document.createElement('div'); b.className = 'brand'; b.textContent = brand; s.appendChild(b); }
+    });
+    const maxStep = (s: HTMLElement) => Math.max(Number(s.dataset.steps || 0),
+      ...Array.from(s.querySelectorAll<HTMLElement>('[data-step]')).map(e => Number(e.dataset.step)), 0);
+    let idx = 0, step = 0;
+    function render() {
+      slides.forEach((s, i) => {
+        const on = i === idx;
+        s.classList.toggle('active', on);
+        s.dataset.now = on ? String(step) : '-1';
+        s.querySelectorAll<HTMLElement>('[data-step]').forEach(e => e.classList.toggle('shown', on && Number(e.dataset.step) <= step));
+      });
+      document.getElementById('bar')!.style.width = `${(idx + 1) / slides.length * 100}%`;
+      history.replaceState(null, '', `#/${idx + 1}/${step}`);
+    }
+    function go(i: number, st: number) { idx = Math.max(0, Math.min(slides.length - 1, i)); step = Math.max(0, Math.min(maxStep(slides[idx]), st)); render(); }
+    function next() { step < maxStep(slides[idx]) ? go(idx, step + 1) : idx < slides.length - 1 && go(idx + 1, 0); }
+    function prev() { step > 0 ? go(idx, step - 1) : idx > 0 && go(idx - 1, maxStep(slides[idx - 1])); }
+    function fromHash() { const m = location.hash.match(/^#\/(\d+)(?:\/(\d+))?/); go(m ? Number(m[1]) - 1 : 0, m && m[2] ? Number(m[2]) : 0); }
+    addEventListener('keydown', e => {
+      const t = e.target as HTMLElement; if (t && /INPUT|TEXTAREA|SELECT/.test(t.tagName) && e.key !== 'Escape') return;
+      if (['ArrowRight', 'PageDown', ' ', 'Enter'].includes(e.key)) { e.preventDefault(); next(); }
+      else if (['ArrowLeft', 'PageUp', 'Backspace'].includes(e.key)) { e.preventDefault(); prev(); }
+      else if (e.key === 'Home') go(0, 0);
+      else if (e.key === 'End') go(slides.length - 1, 99);
+      else if (e.key === 'f' || e.key === 'F') document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+    });
+    addEventListener('hashchange', () => { if (!location.hash.startsWith(`#/${idx + 1}/${step}`)) fromHash(); });
+    function fit() { const k = Math.min(innerWidth / 1600, innerHeight / 900); deck.style.transform = `scale(${k})`; }
+    addEventListener('resize', fit); fit(); fromHash();
+  </script>
+</body>
+</html>
